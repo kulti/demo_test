@@ -3,9 +3,12 @@ package app_test
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/demo/app"
+	"github.com/go-faker/faker/v4"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/suite"
 )
@@ -36,17 +39,17 @@ type AppSuite struct {
 }
 
 func (s *AppSuite) SetupTest() {
+	var seed int64 = time.Now().UnixNano()
+	s.T().Logf("rand seed: %d", seed)
+	faker.SetRandomSource(rand.NewSource(seed))
+
 	mockCtl := gomock.NewController(s.T())
 	s.mockDB = NewMockUsersDB(mockCtl)
 	s.appInst = app.New(s.mockDB)
 }
 
 func (s *AppSuite) TestDuplicateUser() {
-	user := app.User{
-		ID:    "test_user_1",
-		Name:  "test_name_1",
-		Phone: "8-911-234-4567",
-	}
+	user := s.genUser()
 
 	s.mockDB.EXPECT().FindUser(user.ID).Return(user, nil)
 	s.mockDB.EXPECT().AddUser(userMatcher{user}).Return(nil)
@@ -59,17 +62,21 @@ func (s *AppSuite) TestDuplicateUser() {
 var errAddUser = errors.New("test error")
 
 func (s *AppSuite) TestDuplicateErr() {
-	user := app.User{
-		ID:    "test_user_1",
-		Name:  "test_name_1",
-		Phone: "8-911-234-4567",
-	}
+	user := s.genUser()
 
 	s.mockDB.EXPECT().FindUser(user.ID).Return(user, nil)
 	s.mockDB.EXPECT().AddUser(gomock.Any()).Return(errAddUser)
 	_, err := s.appInst.DuplicateUser(user.ID)
 
 	s.Require().ErrorIs(err, errAddUser)
+}
+
+func (s *AppSuite) genUser() app.User {
+	return app.User{
+		ID:    faker.Word(),
+		Name:  faker.Word(),
+		Phone: faker.Phonenumber(),
+	}
 }
 
 func TestApp(t *testing.T) {
