@@ -59,9 +59,9 @@ func (s *AppSuite) TestDuplicateUser() {
 	s.Require().NotEqual(newID, user.ID)
 }
 
-var errAddUser = errors.New("test error")
+var errAddUser = errors.New("test add error")
 
-func (s *AppSuite) TestDuplicateErr() {
+func (s *AppSuite) TestDuplicateAddUserErr() {
 	user := s.genUser()
 
 	s.mockDB.EXPECT().FindUser(user.ID).Return(user, nil)
@@ -69,6 +69,17 @@ func (s *AppSuite) TestDuplicateErr() {
 	_, err := s.appInst.DuplicateUser(user.ID)
 
 	s.Require().ErrorIs(err, errAddUser)
+}
+
+var errFindUser = errors.New("test find error")
+
+func (s *AppSuite) TestDuplicateFindUserErr() {
+	user := s.genUser()
+
+	s.mockDB.EXPECT().FindUser(user.ID).Return(user, errFindUser)
+	_, err := s.appInst.DuplicateUser(user.ID)
+
+	s.Require().ErrorIs(err, errFindUser)
 }
 
 func (s *AppSuite) genUser() app.User {
