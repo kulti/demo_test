@@ -30,6 +30,14 @@ Phone: {{.Phone}}`
 	}
 }
 
+func (a *App) CreateUser(user User) {
+	go func() {
+		if err := a.db.AddUser(user); err != nil {
+			//... retry or notify
+		}
+	}()
+}
+
 func (a *App) DuplicateUser(userID string) (string, error) {
 	user, err := a.db.FindUser(userID)
 	if err != nil {
