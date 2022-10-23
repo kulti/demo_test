@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -80,6 +82,29 @@ func (s *AppSuite) TestDuplicateFindUserErr() {
 	_, err := s.appInst.DuplicateUser(user.ID)
 
 	s.Require().ErrorIs(err, errFindUser)
+}
+
+func (s *AppSuite) TestMakeBusinessCard() {
+	user := app.User{
+		ID:    faker.Word(),
+		Name:  "Mr. Frog",
+		Phone: "+0-123-45-67-89",
+	}
+	s.mockDB.EXPECT().FindUser(user.ID).Return(user, nil)
+
+	card, err := s.appInst.MakeBusinessCard(user.ID)
+	s.Require().NoError(err)
+
+	fileName := filepath.Join("testdata", user.Name)
+
+	if update {
+		err := os.WriteFile(fileName, []byte(card), 0644)
+		s.Require().NoError(err)
+	} else {
+		expected, err := os.ReadFile(fileName)
+		s.Require().NoError(err)
+		s.Require().Equal(card, string(expected))
+	}
 }
 
 func (s *AppSuite) genUser() app.User {
