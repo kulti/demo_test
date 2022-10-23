@@ -3,7 +3,11 @@ package app
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"text/template"
+	"time"
+
+	"github.com/cabify/timex"
 )
 
 type UsersDB interface {
@@ -32,8 +36,14 @@ Phone: {{.Phone}}`
 
 func (a *App) CreateUser(user User) {
 	go func() {
-		if err := a.db.AddUser(user); err != nil {
-			//... retry or notify
+		for {
+			if err := a.db.AddUser(user); err != nil {
+				const retryInterval = 5 * time.Second
+				log.Printf("failed to store user into DB (retry in %s): %s\n", retryInterval, err)
+				timex.Sleep(retryInterval)
+			} else {
+				break
+			}
 		}
 	}()
 }

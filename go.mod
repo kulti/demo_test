@@ -3,6 +3,7 @@ module github.com/demo/app
 go 1.18
 
 require (
+	github.com/cabify/timex v1.1.0
 	github.com/go-faker/faker/v4 v4.5.0
 	github.com/golang/mock v1.6.0
 	github.com/stretchr/testify v1.8.0

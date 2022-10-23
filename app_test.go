@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cabify/timex/timextest"
 	"github.com/demo/app"
 	"github.com/go-faker/faker/v4"
 	"github.com/golang/mock/gomock"
@@ -16,6 +17,11 @@ import (
 )
 
 //go:generate mockgen -destination=mock_db_test.go -package=app_test . UsersDB
+
+var (
+	errAddUser  = errors.New("test add error")
+	errFindUser = errors.New("test find error")
+)
 
 type userMatcher struct {
 	app.User
@@ -36,8 +42,9 @@ func (u userMatcher) String() string {
 
 type AppSuite struct {
 	suite.Suite
-	mockDB  *MockUsersDB
-	appInst *app.App
+	mockDB    *MockUsersDB
+	appInst   *app.App
+	stubTimex *timextest.TestImplementation
 }
 
 func (s *AppSuite) SetupTest() {
@@ -48,6 +55,11 @@ func (s *AppSuite) SetupTest() {
 	mockCtl := gomock.NewController(s.T())
 	s.mockDB = NewMockUsersDB(mockCtl)
 	s.appInst = app.New(s.mockDB)
+	s.stubTimex = timextest.Mock(time.Now().UTC())
+}
+
+func (s *AppSuite) TearDownTest() {
+	s.stubTimex.TearDown()
 }
 
 func (s *AppSuite) TestCreateUser() {
@@ -62,6 +74,37 @@ func (s *AppSuite) TestCreateUser() {
 	s.wait(waitCh)
 }
 
+func (s *AppSuite) TestCreateUserRetryOnError() {
+	user := s.genUser()
+
+	waitCh := make(chan struct{})
+	s.mockDB.EXPECT().AddUser(userMatcher{user}).DoAndReturn(func(app.User) error {
+		close(waitCh)
+		return errAddUser
+	})
+	s.appInst.CreateUser(user)
+
+	s.wait(waitCh)
+
+	var sleepCall timextest.SleepCall
+	s.Require().Eventually(func() bool {
+		select {
+		case sleepCall = <-s.stubTimex.SleepCalls:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, time.Millisecond)
+
+	waitCh2 := make(chan struct{})
+	s.mockDB.EXPECT().AddUser(userMatcher{user}).Do(func(app.User) {
+		close(waitCh2)
+	})
+
+	sleepCall.WakeUp()
+	s.wait(waitCh2)
+}
+
 func (s *AppSuite) TestDuplicateUser() {
 	user := s.genUser()
 
@@ -73,8 +116,6 @@ func (s *AppSuite) TestDuplicateUser() {
 	s.Require().NotEqual(newID, user.ID)
 }
 
-var errAddUser = errors.New("test add error")
-
 func (s *AppSuite) TestDuplicateAddUserErr() {
 	user := s.genUser()
 
@@ -84,8 +125,6 @@ func (s *AppSuite) TestDuplicateAddUserErr() {
 
 	s.Require().ErrorIs(err, errAddUser)
 }
-
-var errFindUser = errors.New("test find error")
 
 func (s *AppSuite) TestDuplicateFindUserErr() {
 	user := s.genUser()
