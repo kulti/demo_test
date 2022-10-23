@@ -50,6 +50,18 @@ func (s *AppSuite) SetupTest() {
 	s.appInst = app.New(s.mockDB)
 }
 
+func (s *AppSuite) TestCreateUser() {
+	user := s.genUser()
+
+	waitCh := make(chan struct{})
+	s.mockDB.EXPECT().AddUser(userMatcher{user}).Do(func(app.User) {
+		close(waitCh)
+	})
+	s.appInst.CreateUser(user)
+
+	s.wait(waitCh)
+}
+
 func (s *AppSuite) TestDuplicateUser() {
 	user := s.genUser()
 
@@ -113,6 +125,17 @@ func (s *AppSuite) genUser() app.User {
 		Name:  faker.Word(),
 		Phone: faker.Phonenumber(),
 	}
+}
+
+func (s *AppSuite) wait(ch <-chan struct{}) {
+	s.Require().Eventually(func() bool {
+		select {
+		case <-ch:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, time.Millisecond)
 }
 
 func TestApp(t *testing.T) {
