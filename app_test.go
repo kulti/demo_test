@@ -65,10 +65,7 @@ func (s *AppSuite) TearDownTest() {
 func (s *AppSuite) TestCreateUser() {
 	user := s.genUser()
 
-	waitCh := make(chan struct{})
-	s.mockDB.EXPECT().AddUser(userMatcher{user}).Do(func(app.User) {
-		close(waitCh)
-	})
+	waitCh := s.expectAddUser(user)
 	s.appInst.CreateUser(user)
 
 	s.wait(waitCh)
@@ -77,13 +74,8 @@ func (s *AppSuite) TestCreateUser() {
 func (s *AppSuite) TestCreateUserRetryOnError() {
 	user := s.genUser()
 
-	waitCh := make(chan struct{})
-	s.mockDB.EXPECT().AddUser(userMatcher{user}).DoAndReturn(func(app.User) error {
-		close(waitCh)
-		return errAddUser
-	})
+	waitCh := s.expectAddUserWithError(user, errAddUser)
 	s.appInst.CreateUser(user)
-
 	s.wait(waitCh)
 
 	var sleepCall timextest.SleepCall
@@ -96,20 +88,16 @@ func (s *AppSuite) TestCreateUserRetryOnError() {
 		}
 	}, time.Second, time.Millisecond)
 
-	waitCh2 := make(chan struct{})
-	s.mockDB.EXPECT().AddUser(userMatcher{user}).Do(func(app.User) {
-		close(waitCh2)
-	})
-
+	waitCh = s.expectAddUser(user)
 	sleepCall.WakeUp()
-	s.wait(waitCh2)
+	s.wait(waitCh)
 }
 
 func (s *AppSuite) TestDuplicateUser() {
 	user := s.genUser()
 
 	s.mockDB.EXPECT().FindUser(user.ID).Return(user, nil)
-	s.mockDB.EXPECT().AddUser(userMatcher{user}).Return(nil)
+	s.expectAddUser(user)
 	newID, err := s.appInst.DuplicateUser(user.ID)
 
 	s.Require().NoError(err)
@@ -120,7 +108,7 @@ func (s *AppSuite) TestDuplicateAddUserErr() {
 	user := s.genUser()
 
 	s.mockDB.EXPECT().FindUser(user.ID).Return(user, nil)
-	s.mockDB.EXPECT().AddUser(gomock.Any()).Return(errAddUser)
+	s.expectAddUserWithError(user, errAddUser)
 	_, err := s.appInst.DuplicateUser(user.ID)
 
 	s.Require().ErrorIs(err, errAddUser)
@@ -156,6 +144,19 @@ func (s *AppSuite) TestMakeBusinessCard() {
 		s.Require().NoError(err)
 		s.Require().Equal(card, string(expected))
 	}
+}
+
+func (s *AppSuite) expectAddUser(user app.User) <-chan struct{} {
+	return s.expectAddUserWithError(user, nil)
+}
+
+func (s *AppSuite) expectAddUserWithError(user app.User, err error) <-chan struct{} {
+	waitCh := make(chan struct{})
+	s.mockDB.EXPECT().AddUser(userMatcher{user}).DoAndReturn(func(app.User) error {
+		close(waitCh)
+		return err
+	})
+	return waitCh
 }
 
 func (s *AppSuite) genUser() app.User {
